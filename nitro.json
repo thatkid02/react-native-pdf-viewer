@@ -1,0 +1,17 @@
+{
+  "cxxNamespace": ["pdfviewer"],
+  "ios": {
+    "iosModuleName": "PdfViewer"
+  },
+  "android": {
+    "androidNamespace": ["pdfviewer"],
+    "androidCxxLibName": "pdfviewer"
+  },
+  "autolinking": {
+    "PdfViewer": {
+      "swift": "HybridPdfViewer",
+      "kotlin": "HybridPdfViewer"
+    }
+  },
+  "ignorePaths": ["node_modules"]
+}
