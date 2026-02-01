@@ -1,5 +1,5 @@
 {
-  "name": "react-native-pdf-viewer",
+  "name": "@thatkid02/react-native-pdf-viewer",
   "version": "0.0.1",
   "description": "Pdf viewer with page thumbnailsthumbnails",
   "main": "./lib/module/index.js",
@@ -59,6 +59,7 @@
   },
   "homepage": "https://github.com/thatkid02/react-native-pdf-viewer#readme",
   "publishConfig": {
+    "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {

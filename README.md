@@ -1,5 +1,8 @@
 # react-native-pdf-viewer
 
+[![npm version](https://badge.fury.io/js/@thatkid02%2Freact-native-pdf-viewer.svg)](https://www.npmjs.com/package/@thatkid02/react-native-pdf-viewer)
+[![npm downloads](https://img.shields.io/npm/dm/@thatkid02/react-native-pdf-viewer.svg)](https://www.npmjs.com/package/@thatkid02/react-native-pdf-viewer)
+
 High-performance PDF viewer for React Native, built with [Nitro Modules](https://nitro.margelo.com/) for native rendering performance.
 
 ## Features
@@ -28,7 +31,7 @@ High-performance PDF viewer for React Native, built with [Nitro Modules](https:/
 ## Installation
 
 ```sh
-npm install react-native-pdf-viewer react-native-nitro-modules
+npm install @thatkid02/react-native-pdf-viewer react-native-nitro-modules
 ```
 
 > `react-native-nitro-modules` is required as this library relies on [Nitro Modules](https://nitro.margelo.com/).
@@ -38,7 +41,7 @@ npm install react-native-pdf-viewer react-native-nitro-modules
 ### Basic Example
 
 ```tsx
-import { PdfViewerView } from 'react-native-pdf-viewer';
+import { PdfViewerView } from '@thatkid02/react-native-pdf-viewer';
 
 export default function App() {
   return (
@@ -61,7 +64,7 @@ export default function App() {
 ```tsx
 import React, { useRef } from 'react';
 import { View, Button, StyleSheet } from 'react-native';
-import { PdfViewerView, type PdfViewer } from 'react-native-pdf-viewer';
+import { PdfViewerView, type PdfViewer } from '@thatkid02/react-native-pdf-viewer';
 
 export default function AdvancedPdfViewer() {
   const pdfRef = useRef<PdfViewer>(null);
