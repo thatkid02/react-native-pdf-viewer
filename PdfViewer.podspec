@@ -14,8 +14,7 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/thatkid02/react-native-pdf-viewer.git", :tag => "#{s.version}" }
 
   s.source_files = [
-    "ios/**/*.{swift}",
-    "ios/**/*.{m,mm}",
+    "ios/**/*.{h,m,mm,swift}",
     "cpp/**/*.{hpp,cpp}",
   ]
 
