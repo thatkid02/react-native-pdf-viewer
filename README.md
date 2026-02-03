@@ -61,6 +61,8 @@ export default function App() {
 
 ### Advanced Example with All Features
 
+  - callback is exposed by nitro modules to avoid re-renders [here](https://nitro.margelo.com/docs/view-components#callbacks-have-to-be-wrapped)
+
 ```tsx
 import React, { useRef } from 'react';
 import { View, Button, StyleSheet } from 'react-native';
@@ -97,10 +99,11 @@ export default function AdvancedPdfViewer() {
     pdfRef.current?.setScale(2.0);
   };
   
+
   return (
     <View style={styles.container}>
       <PdfViewerView
-        ref={pdfRef}
+        hybridRef={callback((ref: PdfViewerRef | null) => {
         source="https://example.com/document.pdf"
         style={styles.pdf}
         // Layout options
@@ -114,12 +117,12 @@ export default function AdvancedPdfViewer() {
         // Loading indicator
         showsActivityIndicator={true}
         // Event handlers
-        onLoadComplete={handleLoadComplete}
-        onPageChange={handlePageChange}
-        onScaleChange={handleScaleChange}
-        onThumbnailGenerated={handleThumbnailGenerated}
-        onError={(event) => console.error(event.message)}
-        onLoadingChange={(event) => console.log('Loading:', event.isLoading)}
+        onLoadComplete={callback(handleLoadComplete)}
+        onPageChange={callback(handlePageChange)}
+        onScaleChange={callback(handleScaleChange)}
+        onError={callback(handleError)}
+        onThumbnailGenerated={callback(handleThumbnailGenerated)}
+        onLoadingChange={callback(handleLoadingChange)}
       />
       
       <View style={styles.controls}>

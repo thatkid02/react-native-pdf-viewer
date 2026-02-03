@@ -2,7 +2,9 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "react-native-pdf-viewer": ["./src/index"]
+      "react-native-pdf-viewer": ["./src/index"],
+      "@thatkid02/react-native-pdf-viewer": ["./src/index"],
+      "@thatkid02/react-native-pdf-viewer/*": ["./src/*"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
