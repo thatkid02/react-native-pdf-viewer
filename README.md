@@ -5,6 +5,8 @@
 
 High-performance PDF viewer for React Native, built with [Nitro Modules](https://nitro.margelo.com/) for native rendering performance.
 
+<video src="docs/pdf.mp4" controls></video>
+
 ## Features
 
 ✅ **High-performance PDF rendering** with native APIs (PDFKit on iOS, PdfRenderer on Android)  

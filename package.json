@@ -1,6 +1,6 @@
 {
   "name": "@thatkid02/react-native-pdf-viewer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Pdf viewer with page thumbnailsthumbnails",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
