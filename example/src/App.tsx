@@ -24,7 +24,7 @@ import {
   type ThumbnailGeneratedEvent,
   type LoadingChangeEvent,
   type PdfViewerRef,
-} from 'react-native-pdf-viewer';
+} from '@thatkid02/react-native-pdf-viewer';
 import { ProgressiveBlurView } from 'react-native-progressive-blur';
 
 const THUMBNAIL_WIDTH = 120;
