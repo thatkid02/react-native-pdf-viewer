@@ -102,6 +102,28 @@ class PdfViewer(context: Context) : FrameLayout(context) {
     var minScale: Float = 0.5f
     var maxScale: Float = 4.0f
     
+    // Content insets for glass UI / transparent bars
+    var contentInsetTop: Float = 0f
+        set(value) {
+            field = value
+            updateContentInsets()
+        }
+    var contentInsetBottom: Float = 0f
+        set(value) {
+            field = value
+            updateContentInsets()
+        }
+    var contentInsetLeft: Float = 0f
+        set(value) {
+            field = value
+            updateContentInsets()
+        }
+    var contentInsetRight: Float = 0f
+        set(value) {
+            field = value
+            updateContentInsets()
+        }
+    
     // Callbacks for HybridPdfViewer integration
     var onLoadCompleteCallback: ((pageCount: Int, pageWidth: Int, pageHeight: Int) -> Unit)? = null
     var onPageChangeCallback: ((page: Int, pageCount: Int) -> Unit)? = null
@@ -125,6 +147,9 @@ class PdfViewer(context: Context) : FrameLayout(context) {
             
             // Allow parent to intercept touch events for pinch-to-zoom
             requestDisallowInterceptTouchEvent(false)
+            
+            // Enable drawing content under padding (for glass UI effect)
+            clipToPadding = false
         }
         
         loadingIndicator = ProgressBar(context).apply {
@@ -189,6 +214,17 @@ class PdfViewer(context: Context) : FrameLayout(context) {
                 }
             }
         })
+    }
+    
+    private fun updateContentInsets() {
+        // Apply content insets as padding
+        // clipToPadding=false allows content to draw under padding (glass UI effect)
+        recyclerView.setPadding(
+            contentInsetLeft.toInt(),
+            contentInsetTop.toInt(),
+            contentInsetRight.toInt(),
+            contentInsetBottom.toInt()
+        )
     }
     
     private fun setupRecyclerView() {
@@ -329,12 +365,7 @@ class PdfViewer(context: Context) : FrameLayout(context) {
                     pendingThumbnails.clear()
                     lastReportedPage = -1
                     
-                    // Preload page dimensions in background
-                    componentScope.launch(Dispatchers.IO) {
-                        preloadPageDimensions(renderer)
-                    }
-                    
-                    // Get first page dimensions immediately
+                    // Get first page dimensions immediately for initial render
                     val firstDim = try {
                         renderMutex.withLock {
                             renderer.openPage(0).use { page ->
@@ -346,6 +377,12 @@ class PdfViewer(context: Context) : FrameLayout(context) {
                     } catch (e: Exception) {
                         Log.e(TAG, "Error reading first page", e)
                         Pair(612, 792)
+                    }
+                    
+                    // Preload a few more page dimensions in background (non-blocking)
+                    // This helps with initial scrolling but doesn't delay the initial render
+                    componentScope.launch(Dispatchers.IO) {
+                        preloadInitialPageDimensions(renderer)
                     }
                     
                     adapter = PdfPageAdapter()
@@ -386,17 +423,66 @@ class PdfViewer(context: Context) : FrameLayout(context) {
         }
     }
     
-    private suspend fun preloadPageDimensions(renderer: PdfRenderer) {
-        for (i in 0 until renderer.pageCount) {
+    // Preload only first few pages (non-blocking) for better initial experience
+    private suspend fun preloadInitialPageDimensions(renderer: PdfRenderer) {
+        // Preload first 5-10 pages to improve initial scrolling
+        val pagesToPreload = minOf(10, renderer.pageCount)
+        for (i in 1 until pagesToPreload) { // Start from 1 since 0 is already loaded
             try {
+                kotlinx.coroutines.delay(50) // Small delay to not block other operations
                 renderMutex.withLock {
-                    renderer.openPage(i).use { page ->
-                        pageDimensions[i] = Pair(page.width, page.height)
+                    if (pageDimensions[i] == null) { // Only if not already loaded
+                        renderer.openPage(i).use { page ->
+                            pageDimensions[i] = Pair(page.width, page.height)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error preloading page $i dimensions", e)
             }
+        }
+        
+        // Lazily load remaining pages with lower priority
+        if (renderer.pageCount > pagesToPreload) {
+            for (i in pagesToPreload until renderer.pageCount) {
+                try {
+                    kotlinx.coroutines.delay(100) // Longer delay for non-critical pages
+                    renderMutex.withLock {
+                        if (pageDimensions[i] == null) {
+                            renderer.openPage(i).use { page ->
+                                pageDimensions[i] = Pair(page.width, page.height)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error preloading page $i dimensions", e)
+                }
+            }
+        }
+    }
+    
+    // Get page dimensions on-demand if not already cached
+    private suspend fun getPageDimensions(pageIndex: Int): Pair<Int, Int> {
+        // Return cached if available
+        pageDimensions[pageIndex]?.let { return it }
+        
+        // Load on-demand
+        val renderer = pdfRenderer ?: return Pair(612, 792) // Standard page size fallback
+        
+        return try {
+            renderMutex.withLock {
+                // Check again inside lock in case another thread loaded it
+                pageDimensions[pageIndex] ?: run {
+                    renderer.openPage(pageIndex).use { page ->
+                        Pair(page.width, page.height).also {
+                            pageDimensions[pageIndex] = it
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading page $pageIndex dimensions", e)
+            Pair(612, 792) // Fallback
         }
     }
     
@@ -445,18 +531,81 @@ class PdfViewer(context: Context) : FrameLayout(context) {
             uri.startsWith("http://") || uri.startsWith("https://") -> {
                 val hash = uri.hashCode().toString()
                 val file = File(context.cacheDir, "pdf_$hash.pdf")
+                val tempFile = File(context.cacheDir, "pdf_${hash}_temp.pdf")
                 
-                if (!file.exists()) {
-                    val connection = URL(uri).openConnection().apply {
+                // Check if cached file exists and is reasonably fresh (< 1 hour)
+                if (file.exists() && (System.currentTimeMillis() - file.lastModified() < 3600_000)) {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "Using cached PDF file: ${file.absolutePath}")
+                    }
+                    return@withContext file
+                }
+                
+                // Download with better error handling and progress
+                try {
+                    val url = URL(uri)
+                    val connection = url.openConnection().apply {
                         connectTimeout = 30_000 // 30 seconds
                         readTimeout = 60_000   // 60 seconds
-                    }
-                    connection.getInputStream().use { input ->
-                        FileOutputStream(file).use { output ->
-                            input.copyTo(output)
+                        setRequestProperty("Accept", "application/pdf")
+                        
+                        // Add cache headers for better HTTP caching
+                        if (file.exists()) {
+                            setRequestProperty("If-Modified-Since", 
+                                java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US)
+                                    .apply { timeZone = java.util.TimeZone.getTimeZone("GMT") }
+                                    .format(java.util.Date(file.lastModified())))
                         }
                     }
+                    
+                    val contentLength = connection.contentLength
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "Downloading PDF: $uri, size: $contentLength bytes")
+                    }
+                    
+                    connection.getInputStream().use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            val buffer = ByteArray(8192)
+                            var bytesRead: Int
+                            var totalRead = 0
+                            
+                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                                output.write(buffer, 0, bytesRead)
+                                totalRead += bytesRead
+                                
+                                // Log progress for large files
+                                if (BuildConfig.DEBUG && contentLength > 0 && totalRead % (contentLength / 10 + 1) == 0) {
+                                    val progress = (totalRead * 100) / contentLength
+                                    Log.d(TAG, "Download progress: $progress%")
+                                }
+                            }
+                            
+                            output.flush()
+                        }
+                    }
+                    
+                    // Move temp file to final location
+                    if (tempFile.exists()) {
+                        file.delete() // Remove old cached file
+                        tempFile.renameTo(file)
+                    }
+                    
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "Download completed: ${file.absolutePath}")
+                    }
+                } catch (e: Exception) {
+                    // Clean up temp file on error
+                    tempFile.delete()
+                    
+                    // If download failed but we have an old cached version, use it
+                    if (file.exists()) {
+                        Log.w(TAG, "Download failed, using cached version: ${e.message}")
+                        return@withContext file
+                    }
+                    
+                    throw e
                 }
+                
                 file
             }
             else -> File(uri)
@@ -850,6 +999,23 @@ class PdfViewer(context: Context) : FrameLayout(context) {
                 val scale = (viewWidth.toFloat() / dimensions.first) * currentScale
                 val targetHeight = (dimensions.second * scale).toInt().coerceAtLeast(100)
                 holder.imageView.layoutParams.height = targetHeight
+            } else {
+                // Dimensions not loaded yet, use default height and trigger lazy load
+                holder.imageView.layoutParams.height = (viewWidth * 1.414f).toInt().coerceAtLeast(100)
+                
+                // Trigger lazy loading of dimensions in background
+                componentScope.launch(Dispatchers.IO) {
+                    val dims = getPageDimensions(position)
+                    withContext(Dispatchers.Main) {
+                        // Update the view if it's still showing this position
+                        if (holder.bindingAdapterPosition == position) {
+                            val scale = (viewWidth.toFloat() / dims.first) * currentScale
+                            val targetHeight = (dims.second * scale).toInt().coerceAtLeast(100)
+                            holder.imageView.layoutParams.height = targetHeight
+                            holder.imageView.requestLayout()
+                        }
+                    }
+                }
             }
             
             // Check cache for valid bitmap at current scale

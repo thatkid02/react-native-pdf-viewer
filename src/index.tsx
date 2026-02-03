@@ -2,13 +2,7 @@ import { getHostComponent, callback } from 'react-native-nitro-modules';
 import type { HybridRef } from 'react-native-nitro-modules';
 import type { PdfViewerMethods, PdfViewerProps } from './PdfViewer.nitro';
 
-let PdfViewerConfig: any;
-
-try {
-  PdfViewerConfig = require('../nitrogen/generated/shared/json/PdfViewerConfig.json');
-} catch {
-  PdfViewerConfig = require('../../nitrogen/generated/shared/json/PdfViewerConfig.json');
-}
+const PdfViewerConfig = require('../nitrogen/generated/shared/json/PdfViewerConfig.json');
 
 export const PdfViewerView = getHostComponent<PdfViewerProps, PdfViewerMethods>(
   'PdfViewer',

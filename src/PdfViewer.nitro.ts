@@ -63,6 +63,27 @@ export interface PdfViewerProps extends HybridViewProps {
   enablePaging?: boolean;
   spacing?: number;
 
+  // Content insets - allows content to start below transparent headers/toolbars
+  /**
+   * Top content inset in pixels
+   * Useful for transparent/glass top bars - content starts below but scrolls behind
+   * @example 80 // Start content below 80px top bar
+   */
+  contentInsetTop?: number;
+  /**
+   * Bottom content inset in pixels
+   * Useful for transparent/glass bottom bars - content ends above but scrolls behind
+   */
+  contentInsetBottom?: number;
+  /**
+   * Left content inset in pixels
+   */
+  contentInsetLeft?: number;
+  /**
+   * Right content inset in pixels
+   */
+  contentInsetRight?: number;
+
   // Zoom controls
   enableZoom?: boolean;
   minScale?: number;

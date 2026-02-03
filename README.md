@@ -189,12 +189,34 @@ const styles = StyleSheet.create({
 | `showsActivityIndicator` | `boolean` | `true` | Show loading indicator |
 | `horizontal` | `boolean` | `false` | Horizontal scroll (iOS only) |
 | `enablePaging` | `boolean` | `false` | Enable paging mode (iOS only) |
+| `contentInsetTop` | `number` | `0` | Top content inset (for glass topbars) |
+| `contentInsetBottom` | `number` | `0` | Bottom content inset (for glass toolbars) |
+| `contentInsetLeft` | `number` | `0` | Left content inset |
+| `contentInsetRight` | `number` | `0` | Right content inset |
 | `onLoadComplete` | `(event) => void` | - | Called when PDF loads |
 | `onPageChange` | `(event) => void` | - | Called when page changes |
 | `onScaleChange` | `(event) => void` | - | Called when zoom changes |
 | `onError` | `(event) => void` | - | Called on error |
 | `onThumbnailGenerated` | `(event) => void` | - | Called when thumbnail is ready |
 | `onLoadingChange` | `(event) => void` | - | Called when loading state changes |
+
+#### Glass UI / Transparent Bars
+
+Use `contentInset` props to make the PDF scroll behind transparent headers and toolbars:
+
+```tsx
+<PdfViewerView
+  source="https://example.com/document.pdf"
+  contentInsetTop={80}      // Height of your transparent top bar
+  contentInsetBottom={60}    // Height of your transparent bottom toolbar
+  style={{ flex: 1 }}
+/>
+```
+
+This creates a modern "glass" effect where:
+- PDF content starts below the top bar
+- Content scrolls behind transparent bars
+- Content ends above the bottom toolbar
 
 ### Methods
 

@@ -127,6 +127,8 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       ensureMainThread {
         self.pdfView.displayMode = enablePaging ? .singlePage : .singlePageContinuous
         self.pdfView.usePageViewController(enablePaging, withViewOptions: nil)
+        // Ensure autoScales is enabled for proper width fitting in both modes
+        self.pdfView.autoScales = true
       }
     }
   }
@@ -143,6 +145,61 @@ class HybridPdfViewer: HybridPdfViewerSpec {
         }
       }
     }
+  }
+  
+  // Content insets for glass UI / transparent bars
+  var contentInsetTop: Double? {
+    didSet {
+      updateContentInsets()
+    }
+  }
+  
+  var contentInsetBottom: Double? {
+    didSet {
+      updateContentInsets()
+    }
+  }
+  
+  var contentInsetLeft: Double? {
+    didSet {
+      updateContentInsets()
+    }
+  }
+  
+  var contentInsetRight: Double? {
+    didSet {
+      updateContentInsets()
+    }
+  }
+  
+  private func updateContentInsets() {
+    ensureMainThread {
+      // Get scroll view from PDFView's view hierarchy
+      // PDFView uses PDFDocumentView which contains a scroll view
+      if let scrollView = self.findScrollView(in: self.pdfView) {
+        let insets = UIEdgeInsets(
+          top: CGFloat(self.contentInsetTop ?? 0),
+          left: CGFloat(self.contentInsetLeft ?? 0),
+          bottom: CGFloat(self.contentInsetBottom ?? 0),
+          right: CGFloat(self.contentInsetRight ?? 0)
+        )
+        scrollView.contentInset = insets
+        // Adjust scroll indicator insets to match
+        scrollView.scrollIndicatorInsets = insets
+      }
+    }
+  }
+  
+  private func findScrollView(in view: UIView) -> UIScrollView? {
+    if let scrollView = view as? UIScrollView {
+      return scrollView
+    }
+    for subview in view.subviews {
+      if let scrollView = findScrollView(in: subview) {
+        return scrollView
+      }
+    }
+    return nil
   }
   
   var enableZoom: Bool? {
@@ -228,7 +285,7 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     // Create PDF view
     pdfView = PDFView()
     pdfView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    pdfView.autoScales = false
+    pdfView.autoScales = true  // Enable autoScales to fit width by default
     pdfView.displayDirection = .vertical
     pdfView.displayMode = .singlePageContinuous
     pdfView.usePageViewController(false, withViewOptions: nil)
@@ -257,8 +314,11 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       activityIndicator.centerYAnchor.constraint(equalTo: containerView.centerYAnchor)
     ])
     
-    let config = URLSessionConfiguration.ephemeral
+    // Use default configuration with caching enabled for better performance
+    let config = URLSessionConfiguration.default
     config.timeoutIntervalForRequest = 30.0
+    config.requestCachePolicy = .returnCacheDataElseLoad
+    config.urlCache = URLCache.shared
     urlSession = URLSession(configuration: config)
     
     super.init()
@@ -454,16 +514,23 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     let pageRect = firstPage.bounds(for: .mediaBox)
     let viewWidth = pdfView.bounds.width
     
-    // Only update scale if view has been laid out (width > 0) and zoom is enabled
+    // Only update scale if view has been laid out (width > 0)
     guard viewWidth > 0 && pageRect.width > 0 else { return }
     
-    let scale = viewWidth / pageRect.width
-    let minScale = CGFloat(self.minScale ?? 0.5)
-    let maxScale = CGFloat(self.maxScale ?? 4.0)
-    
-    // Clamp the scale between min and max
-    let clampedScale = max(minScale, min(maxScale, scale))
-    pdfView.scaleFactor = clampedScale
+    // In continuous scroll mode with autoScales=true, PDFKit handles scaling automatically
+    // We just need to ensure autoScales is enabled
+    if pdfView.displayMode == .singlePageContinuous {
+      pdfView.autoScales = true
+    } else {
+      // For paging mode, calculate and set the scale to fit width
+      let scale = viewWidth / pageRect.width
+      let minScale = CGFloat(self.minScale ?? 0.5)
+      let maxScale = CGFloat(self.maxScale ?? 4.0)
+      
+      // Clamp the scale between min and max
+      let clampedScale = max(minScale, min(maxScale, scale))
+      pdfView.scaleFactor = clampedScale
+    }
   }
   
   private func resolveURL(from source: String) -> URL? {
