@@ -310,7 +310,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0F',
+    backgroundColor: '#0a0a0f33',
   },
   content: {
     flex: 1,
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   },
   pdfViewer: {
     flex: 1,
-    backgroundColor: '#0A0A0F',
+    backgroundColor: '#0a0a0f63',
   },
   thumbnailToggleContainer: {
     position: 'absolute',

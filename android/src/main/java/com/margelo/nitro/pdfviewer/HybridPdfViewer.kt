@@ -138,6 +138,30 @@ class HybridPdfViewer(private val reactContext: ThemedReactContext) : HybridPdfV
             value?.let { documentViewer.showsActivityIndicator = it }
         }
     
+    override var contentInsetTop: Double? = null
+        set(value) {
+            field = value
+            value?.let { documentViewer.contentInsetTop = it.toFloat() }
+        }
+    
+    override var contentInsetBottom: Double? = null
+        set(value) {
+            field = value
+            value?.let { documentViewer.contentInsetBottom = it.toFloat() }
+        }
+    
+    override var contentInsetLeft: Double? = null
+        set(value) {
+            field = value
+            value?.let { documentViewer.contentInsetLeft = it.toFloat() }
+        }
+    
+    override var contentInsetRight: Double? = null
+        set(value) {
+            field = value
+            value?.let { documentViewer.contentInsetRight = it.toFloat() }
+        }
+    
     // Event callbacks - these are set by Nitro
     override var onLoadComplete: ((event: LoadCompleteEvent) -> Unit)? = null
     override var onPageChange: ((event: PageChangeEvent) -> Unit)? = null

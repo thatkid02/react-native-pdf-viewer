@@ -396,6 +396,13 @@ class PdfViewer(context: Context) : FrameLayout(context) {
                     }
                     emitLoadComplete(renderer.pageCount, firstDim.first, firstDim.second)
                     
+                    // Force initial layout and render by scrolling slightly
+                    // This ensures content appears without requiring user interaction
+                    post {
+                        recyclerView.scrollBy(0, 2)
+                        recyclerView.scrollBy(0, -2)
+                    }
+                    
                     schedulePreload()
                 }
             } catch (e: SecurityException) {

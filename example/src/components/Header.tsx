@@ -58,11 +58,11 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 200,
+    height: 160,
     zIndex: 10,
   },
   androidGradient: {
-    backgroundColor: 'rgba(10, 10, 15, 0.98)',
+    backgroundColor: 'rgba(0, 0, 0, 0.21)',
   },
   headerContent: {
     flex: 1,
