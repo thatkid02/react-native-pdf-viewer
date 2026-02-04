@@ -15,7 +15,8 @@ interface ThumbnailSidebarProps {
   totalPages: number;
   currentPage: number;
   thumbnails: Map<number, string>;
-  onPagePress: (page: number) => void;
+  onThumbnailPress: (page: number) => void;
+  onClose: () => void;
 }
 
 export function ThumbnailSidebar({
@@ -23,13 +24,14 @@ export function ThumbnailSidebar({
   totalPages,
   currentPage,
   thumbnails,
-  onPagePress,
+  onThumbnailPress,
+  onClose,
 }: ThumbnailSidebarProps) {
   if (!visible) return null;
 
   const renderThumbnail = (page: number) => {
     const thumbnailUri = thumbnails.get(page);
-    const isCurrentPage = page + 1 === currentPage;
+    const isCurrentPage = page === currentPage;
 
     return (
       <TouchableOpacity
@@ -38,7 +40,7 @@ export function ThumbnailSidebar({
           styles.thumbnailItem,
           isCurrentPage && styles.thumbnailItemActive,
         ]}
-        onPress={() => onPagePress(page + 1)}
+        onPress={() => onThumbnailPress(page)}
       >
         <View style={styles.thumbnailCard}>
           {thumbnailUri ? (
@@ -71,10 +73,16 @@ export function ThumbnailSidebar({
   };
 
   return (
-    <View style={styles.thumbnailSidebar}>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Pages</Text>
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Text style={styles.closeButtonText}>✕</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView
-        style={styles.thumbnailList}
-        contentContainerStyle={styles.thumbnailListContent}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {Array.from({ length: totalPages }, (_, i) => renderThumbnail(i))}
@@ -84,6 +92,55 @@ export function ThumbnailSidebar({
 }
 
 const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: 200,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: -4, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingTop: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    gap: 12,
+  },
   thumbnailSidebar: {
     position: 'absolute',
     top: 150, // Account for status bar + header
@@ -115,14 +172,14 @@ const styles = StyleSheet.create({
   },
   thumbnailCard: {
     position: 'relative',
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: 'rgba(28, 28, 30, 0.8)',
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   thumbnailItemActive: {
-    transform: [{ scale: 1.05 }],
+    borderColor: '#6366f1',
   },
   thumbnailImage: {
     width: THUMBNAIL_WIDTH,
@@ -147,12 +204,12 @@ const styles = StyleSheet.create({
   },
   currentBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0, 122, 255, 0.95)',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#6366f1',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -170,7 +227,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   thumbnailPageNumberActive: {
-    color: '#0A84FF',
+    color: '#6366f1',
     fontWeight: '700',
   },
 });

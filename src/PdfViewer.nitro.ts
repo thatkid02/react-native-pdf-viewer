@@ -10,6 +10,13 @@ export interface LoadCompleteEvent {
   pageHeight: number;
 }
 
+export interface DocumentInfo {
+  pageCount: number;
+  pageWidth: number;
+  pageHeight: number;
+  currentPage: number; // 0-indexed
+}
+
 export interface PageChangeEvent {
   page: number;
   pageCount: number;
@@ -113,6 +120,9 @@ export interface PdfViewerMethods extends HybridViewMethods {
 
   // Generate thumbnails for all pages
   generateAllThumbnails(): void;
+
+  // Get current document info (for querying cached PDFs)
+  getDocumentInfo(): DocumentInfo | null;
 }
 
 export type PdfViewer = HybridView<PdfViewerProps, PdfViewerMethods>;

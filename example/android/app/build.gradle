@@ -105,6 +105,15 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+
+    packagingOptions {
+        pickFirst 'com/facebook/react/viewmanagers/RNCSafeAreaProviderManagerDelegate.class'
+        pickFirst 'com/facebook/react/viewmanagers/RNCSafeAreaViewManagerDelegate.class'
+        pickFirst 'com/facebook/react/viewmanagers/RNCSafeAreaProviderManagerDelegate$1.class'
+        pickFirst 'com/facebook/react/viewmanagers/RNCSafeAreaViewManagerDelegate$1.class'
+        pickFirst 'com/facebook/react/viewmanagers/RNCSafeAreaProviderManagerInterface.class'
+        pickFirst 'com/facebook/react/viewmanagers/RNCSafeAreaViewManagerInterface.class'
+    }
 }
 
 dependencies {

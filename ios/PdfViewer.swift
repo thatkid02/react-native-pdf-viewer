@@ -1,6 +1,7 @@
 import Foundation
 import PDFKit
 import NitroModules
+import CryptoKit
 
 //  Error Types
 enum PdfViewerError: LocalizedError {
@@ -68,10 +69,12 @@ class HybridPdfViewer: HybridPdfViewerSpec {
   private var activityIndicator: UIActivityIndicatorView!
   private var document: PDFDocument?
   private var sourceUri: String?
+  private var documentHash: String?  // MD5 hash of source URI for caching
   private var urlSession: URLSession!
   private var downloadTask: URLSessionDataTask?
   private var loadToken: Int = 0
   private var boundsObservation: NSKeyValueObservation?
+  private var backgroundObserver: NSObjectProtocol?
   private var isLoading: Bool = false {
     didSet {
       if isLoading != oldValue {
@@ -81,14 +84,9 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     }
   }
   
-  // Optimized caching with limits
-  private lazy var thumbnailCache: NSCache<NSNumber, NSString> = {
-    let cache = NSCache<NSNumber, NSString>()
-    cache.countLimit = 50  // Max 50 thumbnails in memory
-    cache.totalCostLimit = 10 * 1024 * 1024  // 10MB limit
-    cache.evictsObjectsWithDiscardedContent = true
-    return cache
-  }()
+  // URL-scoped thumbnail cache: document hash -> page index -> URI
+  private var thumbnailCache = [String: [Int: String]]()
+  private let cacheLock = NSLock()
   
   // Dedicated queue for thumbnail generation with limited concurrency
   private let thumbnailQueue = DispatchQueue(label: "com.pdfviewer.thumbnails", qos: .utility, attributes: .concurrent)
@@ -345,6 +343,15 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       object: nil
     )
     
+    // Observe app entering background to cleanup thumbnail cache
+    backgroundObserver = NotificationCenter.default.addObserver(
+      forName: UIApplication.didEnterBackgroundNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      self?.cleanupThumbnailDirectory()
+    }
+    
     // Observe bounds changes to update scale factor when view is resized
     boundsObservation = pdfView.observe(\.bounds, options: [.new]) { [weak self] _, _ in
       guard let self = self else { return }
@@ -359,11 +366,19 @@ class HybridPdfViewer: HybridPdfViewerSpec {
   
   deinit {
     NotificationCenter.default.removeObserver(self)
+    if let observer = backgroundObserver {
+      NotificationCenter.default.removeObserver(observer)
+    }
     boundsObservation?.invalidate()
     downloadTask?.cancel()
     urlSession.invalidateAndCancel()
-    thumbnailCache.removeAllObjects()
-    cleanupThumbnailDirectory()
+    
+    // Clear in-memory cache for this document only (disk cache persists)
+    if let hash = documentHash {
+      cacheLock.lock()
+      thumbnailCache.removeValue(forKey: hash)
+      cacheLock.unlock()
+    }
   }
   
   //  Document Loading
@@ -393,6 +408,7 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     
     // Store the source URI for thumbnail caching
     sourceUri = source
+    documentHash = computeDocumentHash(source)
     
     guard let url = resolveURL(from: source) else {
       ensureMainThread { self.isLoading = false }
@@ -498,7 +514,11 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     isLoading = false
     self.document = document
     pdfView.document = document
-    thumbnailCache.removeAllObjects()
+    
+    // Clear in-memory cache for all documents
+    cacheLock.lock()
+    thumbnailCache.removeAll()
+    cacheLock.unlock()
     
     // Ensure autoScales is enabled for proper width fitting
     pdfView.autoScales = true
@@ -581,7 +601,9 @@ class HybridPdfViewer: HybridPdfViewerSpec {
   
   @objc private func didReceiveMemoryWarning() {
     // Clear thumbnail cache to free up memory
-    thumbnailCache.removeAllObjects()
+    cacheLock.lock()
+    thumbnailCache.removeAll()
+    cacheLock.unlock()
     
     // Clear pending thumbnails set
     pendingLock.lock()
@@ -636,16 +658,37 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       throw PdfViewerError.documentNotLoaded
     }
     
+    guard let hash = documentHash else {
+      throw PdfViewerError.invalidSource
+    }
+    
     let pageIndex = Int(page)
     guard pageIndex >= 0 && pageIndex < document.pageCount else {
       throw PdfViewerError.invalidPageIndex(page: pageIndex, pageCount: document.pageCount)
     }
     
-    let pageKey = NSNumber(value: pageIndex)
+    // Check in-memory cache first
+    cacheLock.lock()
+    if let cachedUri = thumbnailCache[hash]?[pageIndex] {
+      cacheLock.unlock()
+      onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: cachedUri))
+      return
+    }
+    cacheLock.unlock()
     
-    // Return cached thumbnail immediately if available
-    if let cached = thumbnailCache.object(forKey: pageKey) {
-      onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: cached as String))
+    // Check disk cache before generating
+    let diskPath = getThumbnailPath(hash: hash, page: pageIndex)
+    if FileManager.default.fileExists(atPath: diskPath.path) {
+      let uri = diskPath.absoluteString
+      // Cache in memory
+      cacheLock.lock()
+      if thumbnailCache[hash] == nil {
+        thumbnailCache[hash] = [:]
+      }
+      thumbnailCache[hash]?[pageIndex] = uri
+      cacheLock.unlock()
+      
+      onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: uri))
       return
     }
     
@@ -671,21 +714,33 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       self.thumbnailSemaphore.wait()
       defer { self.thumbnailSemaphore.signal() }
       
-      // Double-check cache after acquiring semaphore
-      if let cached = self.thumbnailCache.object(forKey: pageKey) {
+      // Double-check disk cache after acquiring semaphore
+      if FileManager.default.fileExists(atPath: diskPath.path) {
+        let uri = diskPath.absoluteString
+        self.cacheLock.lock()
+        if self.thumbnailCache[hash] == nil {
+          self.thumbnailCache[hash] = [:]
+        }
+        self.thumbnailCache[hash]?[pageIndex] = uri
+        self.cacheLock.unlock()
+        
         DispatchQueue.main.async { [weak self] in
-          self?.onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: cached as String))
+          self?.onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: uri))
         }
         return
       }
       
-      self.generateThumbnailSync(document: document, pageIndex: pageIndex, pageKey: pageKey)
+      self.generateThumbnailSync(document: document, pageIndex: pageIndex, hash: hash)
     }
   }
   
   func generateAllThumbnails() throws {
     guard let document = document else {
       throw PdfViewerError.documentNotLoaded
+    }
+    
+    guard let hash = documentHash else {
+      throw PdfViewerError.invalidSource
     }
     
     let pageCount = document.pageCount
@@ -696,12 +751,30 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       
       for pageIndex in 0..<pageCount {
         autoreleasepool {
-          let pageKey = NSNumber(value: pageIndex)
-          
-          // Return cached thumbnail immediately
-          if let cached = self.thumbnailCache.object(forKey: pageKey) {
+          // Check in-memory cache
+          self.cacheLock.lock()
+          if let cachedUri = self.thumbnailCache[hash]?[pageIndex] {
+            self.cacheLock.unlock()
             DispatchQueue.main.async { [weak self] in
-              self?.onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: cached as String))
+              self?.onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: cachedUri))
+            }
+            return
+          }
+          self.cacheLock.unlock()
+          
+          // Check disk cache
+          let diskPath = self.getThumbnailPath(hash: hash, page: pageIndex)
+          if FileManager.default.fileExists(atPath: diskPath.path) {
+            let uri = diskPath.absoluteString
+            self.cacheLock.lock()
+            if self.thumbnailCache[hash] == nil {
+              self.thumbnailCache[hash] = [:]
+            }
+            self.thumbnailCache[hash]?[pageIndex] = uri
+            self.cacheLock.unlock()
+            
+            DispatchQueue.main.async { [weak self] in
+              self?.onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: uri))
             }
             return
           }
@@ -709,14 +782,38 @@ class HybridPdfViewer: HybridPdfViewerSpec {
           self.thumbnailSemaphore.wait()
           defer { self.thumbnailSemaphore.signal() }
           
-          self.generateThumbnailSync(document: document, pageIndex: pageIndex, pageKey: pageKey)
+          self.generateThumbnailSync(document: document, pageIndex: pageIndex, hash: hash)
         }
       }
     }
   }
   
+  func getDocumentInfo() throws -> DocumentInfo? {
+    guard let document = document else {
+      return nil
+    }
+    
+    guard let firstPage = document.page(at: 0) else {
+      return nil
+    }
+    
+    // Get current page index
+    var currentPageIndex = 0
+    if let currentPage = pdfView.currentPage {
+      currentPageIndex = document.index(for: currentPage)
+    }
+    
+    let bounds = firstPage.bounds(for: .mediaBox)
+    return DocumentInfo(
+      pageCount: Double(document.pageCount),
+      pageWidth: bounds.width,
+      pageHeight: bounds.height,
+      currentPage: Double(currentPageIndex)
+    )
+  }
+  
   //  Private Thumbnail Generation
-  private func generateThumbnailSync(document: PDFDocument, pageIndex: Int, pageKey: NSNumber) {
+  private func generateThumbnailSync(document: PDFDocument, pageIndex: Int, hash: String) {
     guard let pdfPage = document.page(at: pageIndex) else { return }
     
     let pageRect = pdfPage.bounds(for: .mediaBox)
@@ -728,10 +825,14 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     
     let thumbnail = pdfPage.thumbnail(of: CGSize(width: thumbWidth, height: thumbHeight), for: .mediaBox)
     
-    if let uri = saveThumbnailToCache(thumbnail, page: pageIndex) {
-      // Calculate approximate memory cost for cache
-      let cost = Int(thumbWidth * thumbHeight * 4)  // Approximate bytes
-      thumbnailCache.setObject(uri as NSString, forKey: pageKey, cost: cost)
+    if let uri = saveThumbnailToCache(thumbnail, page: pageIndex, hash: hash) {
+      // Cache in memory
+      cacheLock.lock()
+      if thumbnailCache[hash] == nil {
+        thumbnailCache[hash] = [:]
+      }
+      thumbnailCache[hash]?[pageIndex] = uri
+      cacheLock.unlock()
       
       DispatchQueue.main.async { [weak self] in
         self?.onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: uri))
@@ -742,21 +843,35 @@ class HybridPdfViewer: HybridPdfViewerSpec {
   }
   
   //  Helper Methods
-  private func saveThumbnailToCache(_ image: UIImage, page: Int) -> String? {
+  private func saveThumbnailToCache(_ image: UIImage, page: Int, hash: String) -> String? {
     guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
     
-    let hash = abs(sourceUri?.hashValue ?? 0)
-    let fileName = "thumb_\(page)_\(hash).jpg"
-    let cacheDir = FileManager.default.temporaryDirectory.appendingPathComponent("PDFThumbnails")
+    let fileName = "\(page).jpg"
+    let documentCacheDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("PDFThumbnails")
+      .appendingPathComponent(hash)
     
     do {
-      try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
-      let fileURL = cacheDir.appendingPathComponent(fileName)
+      try FileManager.default.createDirectory(at: documentCacheDir, withIntermediateDirectories: true)
+      let fileURL = documentCacheDir.appendingPathComponent(fileName)
       try data.write(to: fileURL, options: .atomic)
       return fileURL.absoluteString
     } catch {
       return nil
     }
+  }
+  
+  private func getThumbnailPath(hash: String, page: Int) -> URL {
+    return FileManager.default.temporaryDirectory
+      .appendingPathComponent("PDFThumbnails")
+      .appendingPathComponent(hash)
+      .appendingPathComponent("\(page).jpg")
+  }
+  
+  private func computeDocumentHash(_ uri: String) -> String {
+    let data = Data(uri.utf8)
+    let digest = Insecure.MD5.hash(data: data)
+    return digest.map { String(format: "%02hhx", $0) }.joined()
   }
   
   private func emitError(_ error: PdfViewerError) {

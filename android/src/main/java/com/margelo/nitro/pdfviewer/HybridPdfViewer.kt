@@ -190,4 +190,14 @@ class HybridPdfViewer(private val reactContext: ThemedReactContext) : HybridPdfV
     override fun generateAllThumbnails() {
         documentViewer.generateAllThumbnails()
     }
+    
+    override fun getDocumentInfo(): DocumentInfo? {
+        val info = documentViewer.getDocumentInfo() ?: return null
+        return DocumentInfo(
+            pageCount = (info["pageCount"] as? Int)?.toDouble() ?: 0.0,
+            pageWidth = (info["pageWidth"] as? Int)?.toDouble() ?: 0.0,
+            pageHeight = (info["pageHeight"] as? Int)?.toDouble() ?: 0.0,
+            currentPage = (info["currentPage"] as? Int)?.toDouble() ?: 0.0
+        )
+    }
 }

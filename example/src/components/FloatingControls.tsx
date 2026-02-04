@@ -18,7 +18,7 @@ interface FloatingControlsProps {
   onResetZoom: () => void;
   onPageInputChange: (text: string) => void;
   onPageInputSubmit: () => void;
-  onPreviousPage: () => void;
+  onPrevPage: () => void;
   onNextPage: () => void;
 }
 
@@ -34,22 +34,22 @@ export function FloatingControls({
   onResetZoom,
   onPageInputChange,
   onPageInputSubmit,
-  onPreviousPage,
+  onPrevPage,
   onNextPage,
 }: FloatingControlsProps) {
   return (
     <View style={styles.floatingControls}>
-      {/* Page Navigation */}
+      {/* Page Info */}
       <View style={styles.pageControls}>
         <TouchableOpacity
           style={[
-            styles.navButton,
-            currentPage <= 1 && styles.navButtonDisabled,
+            styles.pageNavButton,
+            currentPage <= 1 && styles.pageNavButtonDisabled,
           ]}
-          onPress={onPreviousPage}
+          onPress={onPrevPage}
           disabled={currentPage <= 1}
         >
-          <Text style={styles.navButtonText}>◀</Text>
+          <Text style={styles.pageNavButtonText}>‹</Text>
         </TouchableOpacity>
 
         <View style={styles.pageInfoContainer}>
@@ -71,13 +71,13 @@ export function FloatingControls({
 
         <TouchableOpacity
           style={[
-            styles.navButton,
-            currentPage >= totalPages && styles.navButtonDisabled,
+            styles.pageNavButton,
+            currentPage >= totalPages && styles.pageNavButtonDisabled,
           ]}
           onPress={onNextPage}
           disabled={currentPage >= totalPages}
         >
-          <Text style={styles.navButtonText}>▶</Text>
+          <Text style={styles.pageNavButtonText}>›</Text>
         </TouchableOpacity>
       </View>
 
@@ -128,9 +128,12 @@ const styles = StyleSheet.create({
   pageControls: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(20, 20, 25, 0.98)',
     borderRadius: 16,
-    padding: 12,
+    padding: 16,
+    paddingHorizontal: 12,
+    gap: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     shadowColor: '#000',
@@ -138,30 +141,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 8,
-    gap: 8,
   },
-  navButton: {
-    width: 48,
-    height: 48,
+  pageNavButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(100, 100, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 122, 255, 0.9)',
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(0, 122, 255, 0.5)',
+    borderColor: 'rgba(100, 100, 255, 0.3)',
   },
-  navButtonDisabled: {
-    backgroundColor: 'rgba(60, 60, 67, 0.5)',
-    borderColor: 'rgba(60, 60, 67, 0.3)',
+  pageNavButtonDisabled: {
+    opacity: 0.3,
+    backgroundColor: 'rgba(50, 50, 50, 0.2)',
+    borderColor: 'rgba(50, 50, 50, 0.3)',
   },
-  navButtonText: {
+  pageNavButtonText: {
+    fontSize: 28,
+    fontWeight: '600',
     color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   pageInfoContainer: {
     alignItems: 'center',
-    paddingHorizontal: 12,
     gap: 4,
   },
   pageLabel: {

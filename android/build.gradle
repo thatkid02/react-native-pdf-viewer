@@ -36,8 +36,6 @@ apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 apply from: '../nitrogen/generated/android/pdfviewer+autolinking.gradle'
 
-apply plugin: "com.facebook.react"
-
 android {
   namespace "com.margelo.nitro.pdfviewer"
 
@@ -89,7 +87,10 @@ android {
       "**/libreactnativejni.so",
       "**/libturbomodulejsijni.so",
       "**/libreact_nativemodule_core.so",
-      "**/libjscexecutor.so"
+      "**/libjscexecutor.so",
+      // Exclude react-native-safe-area-context generated code to prevent duplicate classes
+      "com/facebook/react/viewmanagers/RNCSafeAreaProviderManagerDelegate**",
+      "com/facebook/react/viewmanagers/RNCSafeAreaViewManagerDelegate**"
     ]
   }
 
@@ -118,4 +119,5 @@ dependencies {
   implementation "com.facebook.react:react-android"
   implementation project(":react-native-nitro-modules")
   implementation "androidx.recyclerview:recyclerview:1.3.2"
+  implementation "androidx.lifecycle:lifecycle-process:2.6.2"
 }
