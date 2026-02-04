@@ -347,7 +347,13 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     
     // Observe bounds changes to update scale factor when view is resized
     boundsObservation = pdfView.observe(\.bounds, options: [.new]) { [weak self] _, _ in
-      self?.updateScaleToFitWidthIfNeeded()
+      guard let self = self else { return }
+      // Only re-enable autoScales during bounds change if we're at default scale
+      // This allows manual zoom to persist through view lifecycle changes
+      if self.pdfView.displayMode == .singlePageContinuous && self.pdfView.scaleFactor == 1.0 {
+        self.pdfView.autoScales = true
+      }
+      self.updateScaleToFitWidthIfNeeded()
     }
   }
   
@@ -494,8 +500,18 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     pdfView.document = document
     thumbnailCache.removeAllObjects()
     
+    // Ensure autoScales is enabled for proper width fitting
+    pdfView.autoScales = true
+    
     // Update scale after document is loaded
     updateScaleToFitWidthIfNeeded()
+    
+    // If bounds were zero, schedule a delayed update
+    if pdfView.bounds.width == 0 {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        self?.updateScaleToFitWidthIfNeeded()
+      }
+    }
     
     if let firstPage = document.page(at: 0) {
       let pageRect = firstPage.bounds(for: .mediaBox)
@@ -517,10 +533,18 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     // Only update scale if view has been laid out (width > 0)
     guard viewWidth > 0 && pageRect.width > 0 else { return }
     
-    // In continuous scroll mode with autoScales=true, PDFKit handles scaling automatically
-    // We just need to ensure autoScales is enabled
+    // In continuous scroll mode, check if we should enable autoScales
     if pdfView.displayMode == .singlePageContinuous {
-      pdfView.autoScales = true
+      // Only enable autoScales if at default scale (hasn't been manually zoomed)
+      // This preserves user's manual zoom level through view lifecycle
+      let currentScale = pdfView.scaleFactor
+      let isDefaultScale = abs(currentScale - 1.0) < 0.01
+      
+      if isDefaultScale {
+        pdfView.autoScales = true
+        // Force PDFView to recalculate scale if needed
+        pdfView.layoutDocumentView()
+      }
     } else {
       // For paging mode, calculate and set the scale to fit width
       let scale = viewWidth / pageRect.width
@@ -599,13 +623,11 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     let maxScale = CGFloat(self.maxScale ?? 4.0)
     let clampedScale = max(minScale, min(maxScale, CGFloat(scale)))
     
-    // Ensure UI update happens on main thread
-    if Thread.isMainThread {
-      pdfView.scaleFactor = clampedScale
-    } else {
-      DispatchQueue.main.async { [weak self] in
-        self?.pdfView.scaleFactor = clampedScale
-      }
+    // Disable autoScales when manually setting scale
+    // This allows programmatic zoom control to work
+    ensureMainThread {
+      self.pdfView.autoScales = false
+      self.pdfView.scaleFactor = clampedScale
     }
   }
   
