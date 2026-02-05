@@ -96,6 +96,10 @@ class HybridPdfViewer: HybridPdfViewerSpec {
   private var pendingThumbnails = Set<Int>()
   private let pendingLock = NSLock()
   
+  // Queue for thumbnail requests that arrive before document is loaded
+  private var queuedThumbnailRequests = [String: Set<Int>]()
+  private let queuedLock = NSLock()
+  
   // Nitro View
   var view: UIView {
     return containerView
@@ -541,6 +545,9 @@ class HybridPdfViewer: HybridPdfViewerSpec {
         pageHeight: Double(pageRect.height)
       ))
     }
+    
+    // Process any thumbnail requests that were queued while loading
+    processQueuedThumbnailRequests()
   }
   
   private func updateScaleToFitWidthIfNeeded() {
@@ -654,20 +661,19 @@ class HybridPdfViewer: HybridPdfViewerSpec {
   }
   
   func generateThumbnail(page: Double) throws {
-    guard let document = document else {
-      throw PdfViewerError.documentNotLoaded
-    }
+    let pageIndex = Int(page)
     
-    guard let hash = documentHash else {
+    // Compute hash from sourceUri - this works even before document is fully loaded
+    let hash: String
+    if let existingHash = documentHash {
+      hash = existingHash
+    } else if let uri = sourceUri {
+      hash = computeDocumentHash(uri)
+    } else {
       throw PdfViewerError.invalidSource
     }
     
-    let pageIndex = Int(page)
-    guard pageIndex >= 0 && pageIndex < document.pageCount else {
-      throw PdfViewerError.invalidPageIndex(page: pageIndex, pageCount: document.pageCount)
-    }
-    
-    // Check in-memory cache first
+    // Check in-memory cache first (works without document)
     cacheLock.lock()
     if let cachedUri = thumbnailCache[hash]?[pageIndex] {
       cacheLock.unlock()
@@ -676,7 +682,7 @@ class HybridPdfViewer: HybridPdfViewerSpec {
     }
     cacheLock.unlock()
     
-    // Check disk cache before generating
+    // Check disk cache before generating (works without document)
     let diskPath = getThumbnailPath(hash: hash, page: pageIndex)
     if FileManager.default.fileExists(atPath: diskPath.path) {
       let uri = diskPath.absoluteString
@@ -690,6 +696,17 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       
       onThumbnailGenerated?(ThumbnailGeneratedEvent(page: Double(pageIndex), uri: uri))
       return
+    }
+    
+    // Need document to generate new thumbnail
+    guard let document = document else {
+      // Queue the request to be processed after document loads
+      queueThumbnailRequest(page: pageIndex, hash: hash)
+      return
+    }
+    
+    guard pageIndex >= 0 && pageIndex < document.pageCount else {
+      throw PdfViewerError.invalidPageIndex(page: pageIndex, pageCount: document.pageCount)
     }
     
     // Check if already being generated
@@ -866,6 +883,29 @@ class HybridPdfViewer: HybridPdfViewerSpec {
       .appendingPathComponent("PDFThumbnails")
       .appendingPathComponent(hash)
       .appendingPathComponent("\(page).jpg")
+  }
+  
+  private func queueThumbnailRequest(page: Int, hash: String) {
+    queuedLock.lock()
+    if queuedThumbnailRequests[hash] == nil {
+      queuedThumbnailRequests[hash] = Set<Int>()
+    }
+    queuedThumbnailRequests[hash]?.insert(page)
+    queuedLock.unlock()
+  }
+  
+  private func processQueuedThumbnailRequests() {
+    guard let hash = documentHash else { return }
+    
+    queuedLock.lock()
+    let queuedPages = queuedThumbnailRequests.removeValue(forKey: hash)
+    queuedLock.unlock()
+    
+    guard let pages = queuedPages, !pages.isEmpty else { return }
+    
+    for page in pages {
+      try? generateThumbnail(page: Double(page))
+    }
   }
   
   private func computeDocumentHash(_ uri: String) -> String {

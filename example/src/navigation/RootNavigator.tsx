@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import PdfViewerScreen from '../screens/PdfViewerScreen';
+import MultiPdfViewerScreen from '../screens/MultiPdfViewerScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -24,6 +25,14 @@ export default function RootNavigator() {
       <Stack.Screen
         name="PdfViewer"
         component={PdfViewerScreen}
+        options={{
+          animation: 'none',
+          presentation: 'card',
+        }}
+      />
+      <Stack.Screen
+        name="MultiPdfViewer"
+        component={MultiPdfViewerScreen}
         options={{
           animation: 'none',
           presentation: 'card',

@@ -115,6 +115,31 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           ))}
         </View>
 
+        {/* Multi-PDF Viewer */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Multi-File Viewer</Text>
+          <TouchableOpacity
+            style={styles.multiPdfCard}
+            onPress={() => navigation.navigate('MultiPdfViewer')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.multiPdfContent}>
+              <View style={styles.multiPdfIcon}>
+                <Text style={styles.multiPdfIconText}>📚</Text>
+              </View>
+              <View style={styles.multiPdfInfo}>
+                <Text style={styles.multiPdfTitle}>View Multiple PDFs</Text>
+                <Text style={styles.multiPdfDescription}>
+                  Browse and switch between files using horizontal thumbnails
+                </Text>
+              </View>
+              <View style={styles.chevron}>
+                <Text style={styles.chevronText}>›</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Features */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Features</Text>
@@ -245,6 +270,42 @@ const styles = StyleSheet.create({
   pdfDescription: {
     fontSize: 14,
     color: '#94a3b8',
+  },
+  multiPdfCard: {
+    backgroundColor: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  multiPdfContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  multiPdfIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  multiPdfIconText: {
+    fontSize: 28,
+  },
+  multiPdfInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  multiPdfTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  multiPdfDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   chevron: {
     marginLeft: 8,

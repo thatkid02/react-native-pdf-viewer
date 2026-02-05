@@ -37,7 +37,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
-  - PdfViewer (0.0.3):
+  - PdfViewer (0.0.4):
     - boost
     - DoubleConversion
     - fast_float
@@ -2951,7 +2951,7 @@ SPEC CHECKSUMS:
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 94ed68010f885728f674f045c72915c91fae526d
   NitroModules: 808eee1dfaf75b2c5a63ea3608cb651cc7d13687
-  PdfViewer: 60f00cac24f2d63c0f4f5819e6a78c53044c78cb
+  PdfViewer: b10dfd54358684724d7c1091215703fde14acdee
   ProgressiveBlur: 1216e12ce8a67b12d58145a6d7c705b8c56d1af9
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: 2b70c6e3abe00396cefd8913efbf6a2db01a2b36
@@ -3029,4 +3029,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: 1d04c36d13ed15973282694ac6babfae967fffcd
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.15.2

@@ -3,32 +3,20 @@
 [![npm version](https://badge.fury.io/js/@thatkid02%2Freact-native-pdf-viewer.svg)](https://www.npmjs.com/package/@thatkid02/react-native-pdf-viewer)
 [![npm downloads](https://img.shields.io/npm/dm/@thatkid02/react-native-pdf-viewer.svg)](https://www.npmjs.com/package/@thatkid02/react-native-pdf-viewer)
 
-High-performance PDF viewer for React Native, built with [Nitro Modules](https://nitro.margelo.com/) for native rendering performance.
+High-performance PDF viewer for React Native, built with [Nitro Modules](https://nitro.margelo.com/) for native rendering.
 
-<video src="docs/pdf.mp4" controls></video>
+<p align="center">
+  <video src="docs/pdf.mp4" width="300" controls></video>
+</p>
 
 ## Features
 
-✅ **High-performance PDF rendering** with native APIs (PDFKit on iOS, PdfRenderer on Android)  
-✅ **Pinch-to-zoom and pan gestures** - Smooth, native gesture handling  
-✅ **Thumbnail generation** for page previews  
-✅ **Local and remote PDF support** (file://, http://, https://)  
-✅ **Page navigation** with events  
-✅ **TypeScript support** - Full type safety  
-✅ **Memory efficient** - Virtualizes pages, only renders visible content  
-✅ **iOS-specific layouts** - Horizontal scroll and paging modes  
-
-## Platform Support
-
-| Feature | Android | iOS | Notes |
-|---------|---------|-----|-------|
-| Local Files (file://) | ✅ | ✅ | |
-| Remote URLs (http/https) | ✅ | ✅ | Prefer HTTPS in production |
-| Zoom Controls | ✅(2 scale) | ✅ | |
-| Page Navigation | ✅ | ✅ | |
-| Horizontal Scroll | ❌ | ✅ | iOS only |
-| Paging Mode | ❌ | ✅ | iOS only |
-| Thumbnail Generation | ✅ | ✅ | Async on both platforms |
+- 📄 **Native PDF rendering** — PDFKit (iOS) & PdfRenderer (Android)
+- 🔍 **Pinch-to-zoom & pan** — Smooth gesture handling
+- 🖼️ **Thumbnail generation** — Async page previews
+- 🌐 **Local & remote files** — `file://`, `http://`, `https://`
+- 📱 **iOS layouts** — Horizontal scroll & paging modes
+- 💾 **Memory efficient** — Virtualized pages, LRU cache
 
 ## Installation
 
@@ -36,285 +24,217 @@ High-performance PDF viewer for React Native, built with [Nitro Modules](https:/
 npm install @thatkid02/react-native-pdf-viewer react-native-nitro-modules
 ```
 
-> `react-native-nitro-modules` is required as this library relies on [Nitro Modules](https://nitro.margelo.com/).
+### iOS
 
-## Usage
+```sh
+cd ios && pod install
+```
 
-### Basic Example
+## Quick Start
 
 ```tsx
 import { PdfViewerView } from '@thatkid02/react-native-pdf-viewer';
 
-export default function App() {
+function App() {
   return (
     <PdfViewerView
       source="https://example.com/document.pdf"
       style={{ flex: 1 }}
-      onLoadComplete={(event) => {
-        console.log('PDF loaded:', event.pageCount, 'pages');
-      }}
-      onError={(event) => {
-        console.error('PDF error:', event.message);
-      }}
+      onLoadComplete={(e) => console.log(`Loaded ${e.pageCount} pages`)}
+      onError={(e) => console.error(e.message)}
     />
   );
 }
 ```
 
-### Advanced Example with All Features
+## Usage with Ref
 
-  - callback is exposed by nitro modules to avoid re-renders [here](https://nitro.margelo.com/docs/view-components#callbacks-have-to-be-wrapped)
+Callbacks must be wrapped with `callback()` from nitro-modules to avoid re-renders. [Learn more](https://nitro.margelo.com/docs/view-components#callbacks-have-to-be-wrapped)
 
 ```tsx
-import React, { useRef } from 'react';
-import { View, Button, StyleSheet } from 'react-native';
-import { PdfViewerView, type PdfViewer } from '@thatkid02/react-native-pdf-viewer';
+import { useRef } from 'react';
+import { View, Button } from 'react-native';
+import { 
+  PdfViewerView, 
+  callback,
+  type PdfViewerRef 
+} from '@thatkid02/react-native-pdf-viewer';
 
-export default function AdvancedPdfViewer() {
-  const pdfRef = useRef<PdfViewer>(null);
-  
-  const handleLoadComplete = (event) => {
-    console.log(`PDF loaded: ${event.pageCount} pages`);
-    console.log(`Page size: ${event.pageWidth}x${event.pageHeight}`);
-    
-    // Generate thumbnails for all pages
-    pdfRef.current?.generateAllThumbnails();
-  };
-  
-  const handlePageChange = (event) => {
-    console.log(`Current page: ${event.page + 1} of ${event.pageCount}`);
-  };
-  
-  const handleScaleChange = (event) => {
-    console.log(`Zoom scale: ${event.scale}`);
-  };
-  
-  const handleThumbnailGenerated = (event) => {
-    console.log(`Thumbnail for page ${event.page}: ${event.uri}`);
-  };
-  
-  const goToPage = (page: number) => {
-    pdfRef.current?.goToPage(page);
-  };
-  
-  const zoomIn = () => {
-    pdfRef.current?.setScale(2.0);
-  };
-  
+function PdfScreen() {
+  const pdfRef = useRef<PdfViewerRef>(null);
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1 }}>
       <PdfViewerView
-        hybridRef={callback((ref: PdfViewerRef | null) => {
+        hybridRef={callback((ref) => { pdfRef.current = ref; })}
         source="https://example.com/document.pdf"
-        style={styles.pdf}
-        // Layout options
-        spacing={16}
+        style={{ flex: 1 }}
         enableZoom={true}
         minScale={0.5}
-        maxScale={5.0}
-        // iOS-only options
-        horizontal={false} // iOS only
-        enablePaging={false} // iOS only
-        // Loading indicator
-        showsActivityIndicator={true}
-        // Event handlers
-        onLoadComplete={callback(handleLoadComplete)}
-        onPageChange={callback(handlePageChange)}
-        onScaleChange={callback(handleScaleChange)}
-        onError={callback(handleError)}
-        onThumbnailGenerated={callback(handleThumbnailGenerated)}
-        onLoadingChange={callback(handleLoadingChange)}
+        maxScale={4.0}
+        onLoadComplete={callback((e) => {
+          console.log(`${e.pageCount} pages, ${e.pageWidth}x${e.pageHeight}`);
+        })}
+        onPageChange={callback((e) => {
+          console.log(`Page ${e.page} of ${e.pageCount}`);
+        })}
+        onThumbnailGenerated={callback((e) => {
+          console.log(`Thumbnail page ${e.page}: ${e.uri}`);
+        })}
       />
       
-      <View style={styles.controls}>
-        <Button title="Go to Page 5" onPress={() => goToPage(4)} />
-        <Button title="Zoom In" onPress={zoomIn} />
+      <View style={{ flexDirection: 'row', padding: 16, gap: 8 }}>
+        <Button title="Page 1" onPress={() => pdfRef.current?.goToPage(0)} />
+        <Button title="Zoom 2x" onPress={() => pdfRef.current?.setScale(2)} />
+        <Button title="Thumbnails" onPress={() => pdfRef.current?.generateAllThumbnails()} />
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  pdf: {
-    flex: 1,
-  },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 16,
-  },
-});
 ```
 
-### Loading Local Files
+## iOS-Only Features
+
+```tsx
+// Horizontal scrolling
+<PdfViewerView source={url} horizontal={true} />
+
+// Paging mode (swipe between pages)
+<PdfViewerView source={url} enablePaging={true} />
+
+// Combined
+<PdfViewerView source={url} horizontal={true} enablePaging={true} />
+```
+
+## Glass UI / Transparent Bars
+
+Content scrolls behind transparent headers/toolbars:
 
 ```tsx
 <PdfViewerView
-  source="file:///path/to/document.pdf"
+  source={url}
+  contentInsetTop={100}    // Header height
+  contentInsetBottom={80}  // Toolbar height
   style={{ flex: 1 }}
 />
 ```
 
-### iOS-Specific Features
-
-```tsx
-// Horizontal scrolling (iOS only)
-<PdfViewerView
-  source="https://example.com/document.pdf"
-  horizontal={true}
-  style={{ flex: 1 }}
-/>
-
-// Paging mode with swipe transitions (iOS only)
-<PdfViewerView
-  source="https://example.com/document.pdf"
-  enablePaging={true}
-  style={{ flex: 1 }}
-/>
-```
-
-## API Reference
-
-### Props
+## Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `source` | `string` | - | PDF source URI (file://, http://, https://) |
-| `spacing` | `number` | `8` | Space between pages in pixels |
-| `enableZoom` | `boolean` | `true` | Enable pinch-to-zoom gestures |
+| `source` | `string` | — | PDF URI (`file://`, `http://`, `https://`) |
+| `spacing` | `number` | `8` | Space between pages (px) |
+| `enableZoom` | `boolean` | `true` | Enable pinch-to-zoom |
 | `minScale` | `number` | `0.5` | Minimum zoom scale |
 | `maxScale` | `number` | `4.0` | Maximum zoom scale |
-| `showsActivityIndicator` | `boolean` | `true` | Show loading indicator |
-| `horizontal` | `boolean` | `false` | Horizontal scroll (iOS only) |
-| `enablePaging` | `boolean` | `false` | Enable paging mode (iOS only) |
-| `contentInsetTop` | `number` | `0` | Top content inset (for glass topbars) |
-| `contentInsetBottom` | `number` | `0` | Bottom content inset (for glass toolbars) |
-| `contentInsetLeft` | `number` | `0` | Left content inset |
-| `contentInsetRight` | `number` | `0` | Right content inset |
-| `onLoadComplete` | `(event) => void` | - | Called when PDF loads |
-| `onPageChange` | `(event) => void` | - | Called when page changes |
-| `onScaleChange` | `(event) => void` | - | Called when zoom changes |
-| `onError` | `(event) => void` | - | Called on error |
-| `onThumbnailGenerated` | `(event) => void` | - | Called when thumbnail is ready |
-| `onLoadingChange` | `(event) => void` | - | Called when loading state changes |
+| `showsActivityIndicator` | `boolean` | `true` | Show loading spinner |
+| `horizontal` | `boolean` | `false` | Horizontal scroll *(iOS only)* |
+| `enablePaging` | `boolean` | `false` | Paging mode *(iOS only)* |
+| `contentInsetTop` | `number` | `0` | Top inset for glass UI |
+| `contentInsetBottom` | `number` | `0` | Bottom inset for glass UI |
+| `contentInsetLeft` | `number` | `0` | Left inset |
+| `contentInsetRight` | `number` | `0` | Right inset |
 
-#### Glass UI / Transparent Bars
+## Events
 
-Use `contentInset` props to make the PDF scroll behind transparent headers and toolbars:
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `onLoadComplete` | `{ pageCount, pageWidth, pageHeight }` | PDF loaded successfully |
+| `onPageChange` | `{ page, pageCount }` | Visible page changed |
+| `onScaleChange` | `{ scale }` | Zoom level changed |
+| `onError` | `{ message, code }` | Error occurred |
+| `onThumbnailGenerated` | `{ page, uri }` | Thumbnail ready |
+| `onLoadingChange` | `{ isLoading }` | Loading state changed |
+
+## Methods
 
 ```tsx
+const pdfRef = useRef<PdfViewerRef>(null);
+
+// Navigate to page (0-indexed)
+pdfRef.current?.goToPage(0);
+
+// Set zoom level
+pdfRef.current?.setScale(2.0);
+
+// Generate single thumbnail
+pdfRef.current?.generateThumbnail(0);
+
+// Generate all thumbnails
+pdfRef.current?.generateAllThumbnails();
+
+// Get document info
+const info = pdfRef.current?.getDocumentInfo();
+// { pageCount, pageWidth, pageHeight, currentPage }
+```
+
+## Platform Differences
+
+| Feature | Android | iOS |
+|---------|:-------:|:---:|
+| Vertical scroll | ✅ | ✅ |
+| Horizontal scroll | — | ✅ |
+| Paging mode | — | ✅ |
+| Pinch-to-zoom | ✅ | ✅ |
+| Double-tap zoom | ✅ | ✅ |
+| Pan when zoomed | ✅ | ✅ |
+| Thumbnails | ✅ | ✅ |
+| Remote URLs | ✅ | ✅ |
+| Local files | ✅ | ✅ |
+
+## Thumbnail Caching
+
+Thumbnails are automatically cached on disk and in memory. When you call `generateThumbnail()`:
+
+1. **Memory cache** is checked first (instant)
+2. **Disk cache** is checked next (fast)
+3. **Generated on-demand** if not cached (async)
+
+This means multiple `PdfViewerView` instances with the same URL share cached thumbnails:
+
+```tsx
+// Main viewer
 <PdfViewerView
-  source="https://example.com/document.pdf"
-  contentInsetTop={80}      // Height of your transparent top bar
-  contentInsetBottom={60}    // Height of your transparent bottom toolbar
-  style={{ flex: 1 }}
+  source={pdfUrl}
+  hybridRef={callback((ref) => { mainRef.current = ref; })}
+  onThumbnailGenerated={callback((e) => {
+    // Thumbnail generated by main viewer is cached
+    setThumbnails(prev => new Map(prev).set(e.page, e.uri));
+  })}
+/>
+
+// Carousel - can request thumbnails even before its PDF loads
+// Will return cached thumbnails instantly if main viewer already generated them
+<PdfViewerView
+  source={pdfUrl}  // Same URL = same cache
+  hybridRef={callback((ref) => {
+    // Request thumbnail - returns from cache if available
+    ref?.generateThumbnail(0);
+  })}
+  onThumbnailGenerated={callback((e) => {
+    setCarouselThumbnail(e.uri);
+  })}
 />
 ```
 
-This creates a modern "glass" effect where:
-- PDF content starts below the top bar
-- Content scrolls behind transparent bars
-- Content ends above the bottom toolbar
-
-### Methods
-
-Access methods via ref:
-
-```tsx
-const pdfRef = useRef<PdfViewer>(null);
-
-// Navigate to specific page (0-indexed)
-pdfRef.current?.goToPage(pageIndex);
-
-// Set zoom scale
-pdfRef.current?.setScale(2.0);
-
-// Generate thumbnail for specific page
-pdfRef.current?.generateThumbnail(pageIndex);
-
-// Generate thumbnails for all pages
-pdfRef.current?.generateAllThumbnails();
-```
-
-### Events
-
-#### LoadCompleteEvent
-```typescript
-{
-  pageCount: number;    // Total number of pages
-  pageWidth: number;    // Width of first page
-  pageHeight: number;   // Height of first page
-}
-```
-
-#### PageChangeEvent
-```typescript
-{
-  page: number;         // Current page index (0-based)
-  pageCount: number;    // Total pages
-}
-```
-
-#### ScaleChangeEvent
-```typescript
-{
-  scale: number;        // Current zoom scale
-}
-```
-
-#### ErrorEvent
-```typescript
-{
-  message: string;      // Error description
-  code: string;         // Error code (e.g., "FILE_NOT_FOUND")
-}
-```
-
-#### ThumbnailGeneratedEvent
-```typescript
-{
-  page: number;         // Page index
-  uri: string;          // File URI of thumbnail image
-}
-```
-
-## Performance
-
-- **Memory efficient**: Virtualizes pages, only renders visible content
-- **Smooth scrolling**: 60 FPS on most devices
-- **Large PDFs**: Tested with 500+ page documents
-- **Smart caching**: Automatic memory management with LRU cache
+**Note:** If `generateThumbnail()` is called before the document loads, the request is queued and processed automatically once loading completes.
 
 ## Troubleshooting
 
-### PDF fails to load from URL
+**PDF fails to load from URL**  
+Ensure the URL is accessible. Use HTTPS in production.
 
-Ensure the URL is accessible and returns a valid PDF. For production apps, always use HTTPS URLs for security.
+**Out of memory on large PDFs**  
+Lower `maxScale` to reduce memory usage. The viewer automatically manages memory with dynamic quality scaling.
 
-### Out of memory errors on large PDFs
-
-The library automatically manages memory, but for very large documents at high zoom levels:
-- Limit `maxScale` to reduce memory usage
-- The Android implementation dynamically reduces quality at high zoom levels
-
-### iOS horizontal/paging mode not working
-
-These features are iOS-only. On Android, the viewer always uses vertical scrolling.
+**Horizontal/paging not working**  
+These are iOS-only features. Android uses vertical scroll.
 
 ## Contributing
 
-- [Development workflow](CONTRIBUTING.md#development-workflow)
-- [Sending a pull request](CONTRIBUTING.md#sending-a-pull-request)
-- [Code of conduct](CODE_OF_CONDUCT.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 ## License
 
 MIT
-
----
-
-Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)

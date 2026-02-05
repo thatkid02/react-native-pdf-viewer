@@ -4,4 +4,5 @@ export type RootStackParamList = {
     pdfUrl: string;
     title: string;
   };
+  MultiPdfViewer: undefined;
 };

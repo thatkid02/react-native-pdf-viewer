@@ -56,6 +56,11 @@ class PdfViewer(context: Context) : FrameLayout(context) {
     companion object {
         private const val TAG = "PdfViewer"
         
+        // Global download synchronization to prevent race conditions
+        // when multiple PdfViewer instances download the same file
+        private val downloadLocks = ConcurrentHashMap<String, Mutex>()
+        private fun getDownloadLock(key: String): Mutex = downloadLocks.getOrPut(key) { Mutex() }
+        
         // Memory management
         private const val CACHE_SIZE_PERCENTAGE = 0.25
         private const val MAX_BITMAP_DIMENSION = 4096
@@ -561,6 +566,9 @@ class PdfViewer(context: Context) : FrameLayout(context) {
             
             emitLoadComplete(renderer.pageCount, firstDim.width, firstDim.height)
             restoreLastViewedPage(renderer)
+            
+            // Process any thumbnail requests that were queued while loading
+            processQueuedThumbnailRequests()
         }
     }
     
@@ -583,6 +591,7 @@ class PdfViewer(context: Context) : FrameLayout(context) {
         bitmapCache.evictAll()
         pageDimensions.clear()
         pendingThumbnails.clear()
+        queuedThumbnailRequests.clear()
         lastReportedPage = -1
     }
     
@@ -692,44 +701,55 @@ class PdfViewer(context: Context) : FrameLayout(context) {
         }
     }
     
-    private fun downloadPdf(uri: String): File {
+    private suspend fun downloadPdf(uri: String): File {
         val hash = uri.hashCode().toString()
         val file = File(context.cacheDir, "pdf_$hash.pdf")
-        val tempFile = File(context.cacheDir, "pdf_${hash}_temp.pdf")
+        val downloadLock = getDownloadLock(hash)
         
-        if (file.exists() && isCacheValid(file)) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "Using cached PDF: ${file.absolutePath}")
-            return file
-        }
-        
-        try {
-            val connection = URL(uri).openConnection().apply {
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                setRequestProperty("Accept", "application/pdf")
-                addConditionalHeaders(file)
+        // Use a lock to prevent multiple instances from downloading the same file simultaneously
+        return downloadLock.withLock {
+            // Check cache again inside lock (another instance might have just finished downloading)
+            if (file.exists() && isCacheValid(file)) {
+                if (BuildConfig.DEBUG) Log.d(TAG, "Using cached PDF: ${file.absolutePath}")
+                return@withLock file
             }
             
-            connection.getInputStream().use { input ->
-                FileOutputStream(tempFile).use { output ->
-                    input.copyTo(output, bufferSize = 8192)
+            val tempFile = File(context.cacheDir, "pdf_${hash}_${System.nanoTime()}_temp.pdf")
+            
+            try {
+                val connection = URL(uri).openConnection().apply {
+                    connectTimeout = CONNECT_TIMEOUT_MS
+                    readTimeout = READ_TIMEOUT_MS
+                    setRequestProperty("Accept", "application/pdf")
+                    addConditionalHeaders(file)
                 }
+                
+                connection.getInputStream().use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output, bufferSize = 8192)
+                    }
+                }
+                
+                // Atomic replace: delete target then rename temp
+                file.delete()
+                if (!tempFile.renameTo(file)) {
+                    // Fallback: copy then delete
+                    tempFile.copyTo(file, overwrite = true)
+                    tempFile.delete()
+                }
+                
+                if (BuildConfig.DEBUG) Log.d(TAG, "Download completed: ${file.absolutePath}")
+            } catch (e: Exception) {
+                tempFile.delete()
+                if (file.exists()) {
+                    Log.w(TAG, "Download failed, using cached version: ${e.message}")
+                    return@withLock file
+                }
+                throw e
             }
             
-            file.delete()
-            tempFile.renameTo(file)
-            
-            if (BuildConfig.DEBUG) Log.d(TAG, "Download completed: ${file.absolutePath}")
-        } catch (e: Exception) {
-            tempFile.delete()
-            if (file.exists()) {
-                Log.w(TAG, "Download failed, using cached version: ${e.message}")
-                return file
-            }
-            throw e
+            file
         }
-        
-        return file
     }
     
     private fun isCacheValid(file: File): Boolean =
@@ -839,27 +859,41 @@ class PdfViewer(context: Context) : FrameLayout(context) {
     fun generateThumbnail(page: Int) {
         if (BuildConfig.DEBUG) Log.d(TAG, "generateThumbnail: $page")
         
-        val renderer = pdfRenderer ?: return emitError("PDF not loaded", "NOT_LOADED")
-        
-        if (page !in 0 until renderer.pageCount) {
-            emitError("Invalid page: $page. Valid range: 0-${renderer.pageCount - 1}", "INVALID_PAGE")
+        // Compute hash from URI - this works even before document is fully loaded
+        val hash = documentHash ?: computeDocumentHashFromUri(_sourceUri)
+        if (hash.isNullOrBlank() || hash == "unknown") {
+            emitError("Cannot compute document hash - no source URI", "HASH_ERROR")
             return
         }
         
-        val hash = documentHash ?: return emitError("Document hash not available", "HASH_ERROR")
-        
-        // Check memory cache
+        // Check memory cache first (works without renderer)
         thumbnailCache[hash]?.get(page)?.let { cachedUri ->
+            if (BuildConfig.DEBUG) Log.d(TAG, "Thumbnail $page found in memory cache")
             emitThumbnailGenerated(page, cachedUri)
             return
         }
         
-        // Check disk cache
+        // Check disk cache (works without renderer)
         val diskPath = getThumbnailPath(hash, page)
         if (File(diskPath).exists()) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Thumbnail $page found in disk cache")
             val uri = "file://$diskPath"
             thumbnailCache.getOrPut(hash) { ConcurrentHashMap() }[page] = uri
             emitThumbnailGenerated(page, uri)
+            return
+        }
+        
+        // Need renderer to generate new thumbnail
+        val renderer = pdfRenderer
+        if (renderer == null) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "PDF not loaded yet, queueing thumbnail request for page $page")
+            // Queue the thumbnail request to be processed after document loads
+            queueThumbnailRequest(page, hash)
+            return
+        }
+        
+        if (page !in 0 until renderer.pageCount) {
+            emitError("Invalid page: $page. Valid range: 0-${renderer.pageCount - 1}", "INVALID_PAGE")
             return
         }
         
@@ -884,6 +918,24 @@ class PdfViewer(context: Context) : FrameLayout(context) {
             } finally {
                 pendingThumbnails.remove(page)
             }
+        }
+    }
+    
+    // Queue for thumbnail requests that arrive before document is loaded
+    private val queuedThumbnailRequests = ConcurrentHashMap<String, MutableSet<Int>>()
+    
+    private fun queueThumbnailRequest(page: Int, hash: String) {
+        queuedThumbnailRequests.getOrPut(hash) { ConcurrentHashMap.newKeySet() }.add(page)
+    }
+    
+    private fun processQueuedThumbnailRequests() {
+        val hash = documentHash ?: return
+        val queuedPages = queuedThumbnailRequests.remove(hash) ?: return
+        
+        if (BuildConfig.DEBUG) Log.d(TAG, "Processing ${queuedPages.size} queued thumbnail requests")
+        
+        queuedPages.forEach { page ->
+            generateThumbnail(page)
         }
     }
     
@@ -967,14 +1019,22 @@ class PdfViewer(context: Context) : FrameLayout(context) {
         "${context.cacheDir}/PDFThumbnails/$hash/thumb_$page.jpg"
     
     private fun computeDocumentHash(): String {
-        val uri = sourceUri ?: return "unknown"
+        return computeDocumentHashFromUri(sourceUri) ?: "unknown"
+    }
+    
+    /**
+     * Compute document hash from URI without requiring document to be loaded.
+     * This allows thumbnail cache lookup even before the PDF is fully loaded.
+     */
+    private fun computeDocumentHashFromUri(uri: String?): String? {
+        if (uri.isNullOrBlank()) return null
         return try {
             MessageDigest.getInstance("MD5")
                 .digest(uri.toByteArray())
                 .joinToString("") { "%02x".format(it) }
                 .take(8)
         } catch (e: Exception) {
-            "unknown"
+            null
         }
     }
     
@@ -1294,6 +1354,7 @@ class PdfViewer(context: Context) : FrameLayout(context) {
         pageDimensions.clear()
         thumbnailCache.clear()
         pendingThumbnails.clear()
+        queuedThumbnailRequests.clear()
     }
     
     private fun recycleCachedBitmaps() {
