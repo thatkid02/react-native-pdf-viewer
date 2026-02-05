@@ -7,7 +7,12 @@ High-performance PDF viewer for React Native, built with [Nitro Modules](https:/
 
 <p align="center">
   <video src="docs/pdf.mp4" width="300" controls></video>
+  <img src="docs/android.gif" width="300" alt="Android Demo">
 </p>
+
+### Questions before you start 
+
+- Ask AI here - https://deepwiki.com/thatkid02/react-native-pdf-viewer
 
 ## Features
 

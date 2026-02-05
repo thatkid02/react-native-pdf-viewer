@@ -109,7 +109,6 @@ export default function MultiPdfViewerScreen({
 
   const handleLoadComplete = useCallback(
     (event: LoadCompleteEvent) => {
-      console.log('✅ PDF Loaded:', selectedPdf?.title);
       setTotalPages(event.pageCount);
       setCurrentPage(1);
       setCurrentScale(1.0);

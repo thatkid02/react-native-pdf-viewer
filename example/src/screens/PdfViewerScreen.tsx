@@ -70,7 +70,6 @@ export default function PdfViewerScreen({
   }, [controlsVisible, controlsOpacity]);
 
   const handleLoadComplete = useCallback((event: LoadCompleteEvent) => {
-    console.log('✅ onLoadComplete fired:', event);
     setTotalPages(event.pageCount);
     setCurrentPage(1);
     setPageInput('1');
@@ -80,7 +79,6 @@ export default function PdfViewerScreen({
     if (event.pageCount > 0) {
       setTimeout(() => {
         const pagesToGenerate = Math.min(10, event.pageCount);
-        console.log(`🖼️ Requesting ${pagesToGenerate} thumbnails`);
         for (let i = 0; i < pagesToGenerate; i++) {
           try {
             pdfRef.current?.generateThumbnail(i);
@@ -107,7 +105,6 @@ export default function PdfViewerScreen({
 
   const handleThumbnailGenerated = useCallback(
     (event: ThumbnailGeneratedEvent) => {
-      console.log('🖼️ Thumbnail generated:', event.page);
       setThumbnails((prev) => new Map(prev).set(event.page, event.uri));
     },
     []
@@ -188,41 +185,20 @@ export default function PdfViewerScreen({
 
   // Cleanup on unmount and query document info on mount (for cached PDFs)
   useEffect(() => {
-    console.log(
-      '🎬 PdfViewerScreen mounted, routeKey:',
-      routeKey,
-      'pdfUrl:',
-      pdfUrl
-    );
-    console.log(
-      '📊 Initial state - totalPages:',
-      totalPages,
-      'thumbnails:',
-      thumbnails.size
-    );
-
     // Query document info after mount to handle cached PDFs
     // When PDF loads from cache, onLoadComplete might fire before React is ready
     setTimeout(() => {
       try {
         const info = pdfRef.current?.getDocumentInfo();
-        console.log('🔍 Queried document info:', info);
         if (info && info.pageCount > 0 && totalPages === 0) {
-          console.log('📦 Restoring cached PDF metadata');
           setTotalPages(info.pageCount);
           const restoredPage = info.currentPage + 1; // Convert 0-indexed to 1-indexed
-          console.log(
-            `📍 Restoring to page ${restoredPage} of ${info.pageCount}`
-          );
           setCurrentPage(restoredPage);
           setPageInput(restoredPage.toString());
           setCurrentScale(1.0);
 
           // Generate thumbnails
           const pagesToGenerate = Math.min(10, info.pageCount);
-          console.log(
-            `🖼️ Requesting ${pagesToGenerate} thumbnails for cached PDF`
-          );
           for (let i = 0; i < pagesToGenerate; i++) {
             pdfRef.current?.generateThumbnail(i);
           }
@@ -233,7 +209,7 @@ export default function PdfViewerScreen({
     }, 100);
 
     return () => {
-      console.log('👋 PdfViewerScreen unmounting');
+      // Cleanup
     };
   }, [routeKey, pdfUrl, totalPages, thumbnails.size]);
 
