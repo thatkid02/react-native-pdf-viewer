@@ -55,8 +55,6 @@ jobs:
     # Or uses NODE_AUTH_TOKEN if trusted publishing not configured
     - name: Publish to NPM
       run: npm publish --access public
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.2.0
