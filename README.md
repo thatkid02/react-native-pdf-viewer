@@ -35,6 +35,35 @@ npm install @thatkid02/react-native-pdf-viewer react-native-nitro-modules
 cd ios && pod install
 ```
 
+### ⚠️ Important: If Installation Fails
+
+If you encounter issues during installation related to missing `nitrogen/generated` files, you may need to apply a yarn patch.
+
+**Problem:** builder bob creates module folder for index with path issue
+
+**Solution:** Add a yarn patch to `lib/module/index.js` to handle the missing nitrogen path:
+
+```bash
+yarn patch @thatkid02/react-native-pdf-viewer
+```
+
+Then for patch modify `lib/module/index.js` and change this line:
+
+```js
+// Before (may fail if nitrogen not generated yet)
+const PdfViewerConfig = require('../nitrogen/generated/shared/json/PdfViewerConfig.json');
+
+// After (with proper path resolution)
+const PdfViewerConfig = require('../../nitrogen/generated/shared/json/PdfViewerConfig.json');
+```
+
+**Key point:** The path `../../nitrogen` is important because the nitrogen module exists at the repository root, not in the module directory.
+
+After patching, run:
+```bash
+yarn patch-commit -u
+```
+
 ## Quick Start
 
 ```tsx
