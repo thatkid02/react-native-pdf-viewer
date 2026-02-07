@@ -1,7 +1,7 @@
 {
   "name": "@thatkid02/react-native-pdf-viewer",
   "version": "0.0.7",
-  "description": "Pdf viewer with page thumbnailsthumbnails",
+  "description": "Pdf viewer with page thumbnails, page navigation, and zooming capabilities for React Native apps.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
@@ -141,7 +141,7 @@
       "tagName": "v${version}"
     },
     "npm": {
-      "publish": false
+      "publish": true
     },
     "github": {
       "release": true
