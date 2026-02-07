@@ -1,23 +1,44 @@
 name: Publish Package
 
 on:
-  release:
-    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-node@v4
       with:
         node-version: '24'
         registry-url: 'https://registry.npmjs.org'
+
     - run: yarn install --immutable
-    - run: yarn prepare
-    - run: npm publish
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Release and Publish
+      run: yarn release -- --increment ${{ github.event.inputs.bump }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
